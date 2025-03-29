@@ -7,16 +7,12 @@ import { PINATA_JWT, PINATA_API } from '../config/api';
 
 // Array of NFT images
 const NFT_IMAGES = [
-  "/NFT_IMAGES/1.png",
-  "/NFT_IMAGES/2.png",
-  "/NFT_IMAGES/3.png",
-  "/NFT_IMAGES/4.jpg",
-  "/NFT_IMAGES/5.jpg",
-  "/NFT_IMAGES/6.png",
-  "/NFT_IMAGES/7.png",
-  "/NFT_IMAGES/8.png",
-  "/NFT_IMAGES/9.png",
-  "/NFT_IMAGES/10.jpg"
+  "https://drive.google.com/file/d/1GrwFQTXWF6P7KIe2rwN2-dlCSgHayVQe/view?usp=drive_link",
+  "https://drive.google.com/file/d/1YEwmOzey4iDHOQfwL-F6TzotGKdlbF7F/view?usp=drive_link",
+  "https://drive.google.com/file/d/1D-EEJ6_p3eTP9uRd8tXBoYXkxIIAcgL5/view?usp=drive_link",
+  "https://drive.google.com/file/d/1lDk4nizY1JQC1XwGmWesgWrGbSaZA-7M/view?usp=drive_link",
+  "https://drive.google.com/file/d/1ZBNY-obVwRIBZAS_PSX7J7oYfz2QtuyG/view?usp=drive_link",
+
 ];
 
 export function VerifyDonation() {
@@ -47,7 +43,7 @@ export function VerifyDonation() {
       await new Promise(resolve => setTimeout(resolve, 2500));
       
       // Select and store the image path with public URL
-      const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length);
+      const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length); ;
       const selectedImagePath = process.env.PUBLIC_URL + NFT_IMAGES[randomIndex];
       setSelectedImage(selectedImagePath);
       
@@ -61,7 +57,8 @@ export function VerifyDonation() {
 
   // Add an error handler for images
   const handleImageError = (e) => {
-    e.target.src = process.env.PUBLIC_URL + '/NFT_IMAGES/1.png'; // Fallback to default image
+    const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length);
+    e.target.src = `${process.env.PUBLIC_URL}/NFT_IMAGES/${randomIndex}.png`; // Fallback to default image
   };
 
   const handleSubmit = async (e) => {
