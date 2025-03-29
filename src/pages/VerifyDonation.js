@@ -4,15 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import { useDonations } from '../contexts/DonationContext'; // Import the context
 import { PINATA_JWT, PINATA_API } from '../config/api';
-
-// Array of NFT images
+//arif
+// Array of NFT images from Google Drive
 const NFT_IMAGES = [
   "https://drive.google.com/file/d/1GrwFQTXWF6P7KIe2rwN2-dlCSgHayVQe/view?usp=drive_link",
   "https://drive.google.com/file/d/1YEwmOzey4iDHOQfwL-F6TzotGKdlbF7F/view?usp=drive_link",
   "https://drive.google.com/file/d/1D-EEJ6_p3eTP9uRd8tXBoYXkxIIAcgL5/view?usp=drive_link",
   "https://drive.google.com/file/d/1lDk4nizY1JQC1XwGmWesgWrGbSaZA-7M/view?usp=drive_link",
-  "https://drive.google.com/file/d/1ZBNY-obVwRIBZAS_PSX7J7oYfz2QtuyG/view?usp=drive_link",
-
+  "https://drive.google.com/file/d/1ZBNY-obVwRIBZAS_PSX7J7oYfz2QtuyG/view?usp=drive_link"
 ];
 
 export function VerifyDonation() {
@@ -43,7 +42,7 @@ export function VerifyDonation() {
       await new Promise(resolve => setTimeout(resolve, 2500));
       
       // Select and store the image path with public URL
-      const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length); ;
+      const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length);
       const selectedImagePath = process.env.PUBLIC_URL + NFT_IMAGES[randomIndex];
       setSelectedImage(selectedImagePath);
       
@@ -73,7 +72,7 @@ export function VerifyDonation() {
       const metadata = {
         name: "LifeNFT Blood Donation Badge",
         description: "NFT awarded for blood donation",
-        image_path: selectedImage, // Store the path instead of IPFS hash
+        image: selectedImage, // Store the Google Drive URL directly
         attributes: {
           donorId: formData.donorId,
           donorName: formData.donorName,
@@ -84,6 +83,20 @@ export function VerifyDonation() {
         }
       };
 
+      // Upload metadata to Pinata
+      const pinataResponse = await axios.post(
+        PINATA_API.PIN_JSON,
+        metadata,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${PINATA_JWT}`
+          }
+        }
+      );
+
+      const ipfsHash = pinataResponse.data.IpfsHash;
+
       const customJson = {
         id: "life_nft",
         json: JSON.stringify({
@@ -93,7 +106,8 @@ export function VerifyDonation() {
           blood_type: formData.bloodType,
           amount: formData.amount,
           notes: formData.notes,
-          image_path: selectedImage, // Store the path in blockchain
+          image_url: selectedImage, // Store the Google Drive URL
+          ipfs_hash: ipfsHash,
           timestamp: new Date().toISOString(),
           tx_id: uuidv4()
         }),
@@ -117,7 +131,8 @@ export function VerifyDonation() {
                 bloodType: formData.bloodType,
                 donationDate: new Date().toISOString(),
                 nftIssued: true,
-                image_path: selectedImage,
+                image_url: selectedImage,
+                ipfs_hash: ipfsHash,
                 verifiedBy: "Your Name"
               };
 

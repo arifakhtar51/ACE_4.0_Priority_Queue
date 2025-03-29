@@ -12,7 +12,7 @@ const mockNFTs = [
   { 
     id: 1, 
     name: 'Blood Donation #1', 
-    image: 'https://images.unsplash.com/photo-1615461066841-6116e61058f4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80',
+    image: 'https://drive.google.com/file/d/1GrwFQTXWF6P7KIe2rwN2-dlCSgHayVQe/view?usp=drive_link',
     bloodType: 'O+',
     donationDate: '2023-01-15',
     hospital: 'City General Hospital',
@@ -22,7 +22,7 @@ const mockNFTs = [
   { 
     id: 2, 
     name: 'Blood Donation #2', 
-    image: 'https://images.unsplash.com/photo-1579154341098-e4e158cc7f55?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80',
+    image: 'https://drive.google.com/file/d/1YEwmOzey4iDHOQfwL-F6TzotGKdlbF7F/view?usp=drive_link',
     bloodType: 'O+',
     donationDate: '2023-02-20',
     hospital: 'Memorial Medical Center',
@@ -32,13 +32,22 @@ const mockNFTs = [
   { 
     id: 3, 
     name: 'Blood Donation #3', 
-    image: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80',
+    image: 'https://drive.google.com/file/d/1D-EEJ6_p3eTP9uRd8tXBoYXkxIIAcgL5/view?usp=drive_link',
     bloodType: 'O+',
     donationDate: '2023-03-10',
     hospital: 'University Health System',
     redeemed: false,
     benefits: ['Free wellness package', '25% off at University Pharmacy']
   }
+];
+
+// Array of NFT images from Google Drive
+const NFT_IMAGES = [
+  "https://drive.google.com/file/d/1GrwFQTXWF6P7KIe2rwN2-dlCSgHayVQe/view?usp=drive_link",
+  "https://drive.google.com/file/d/1YEwmOzey4iDHOQfwL-F6TzotGKdlbF7F/view?usp=drive_link",
+  "https://drive.google.com/file/d/1D-EEJ6_p3eTP9uRd8tXBoYXkxIIAcgL5/view?usp=drive_link",
+  "https://drive.google.com/file/d/1lDk4nizY1JQC1XwGmWesgWrGbSaZA-7M/view?usp=drive_link",
+  "https://drive.google.com/file/d/1ZBNY-obVwRIBZAS_PSX7J7oYfz2QtuyG/view?usp=drive_link"
 ];
 
 export function UserDashboard() {
@@ -87,31 +96,57 @@ export function UserDashboard() {
           .filter(tx => tx[1].op[0] === 'custom_json' && tx[1].op[1].id === 'life_nft')
           .map(tx => {
             const jsonData = JSON.parse(tx[1].op[1].json);
-            // Ensure the image path is correct by prepending the public URL if needed
-            const imagePath = jsonData.image_path.startsWith('http') 
-              ? jsonData.image_path 
-              : process.env.PUBLIC_URL + jsonData.image_path;
+            console.log("NFT transaction data:", jsonData);
+            
+            // Check if IPFS hash is valid
+            if (jsonData.ipfs_hash && jsonData.ipfs_hash !== 'undefined') {
+              const pinataUrl = `https://gray-worried-otter-123.mypinata.cloud/ipfs/${jsonData.ipfs_hash}`;
+              console.log("Pinata URL:", pinataUrl);
+              console.log("CID:", jsonData.ipfs_hash);
+              
+              fetch(pinataUrl)
+                .then(res => res.json())
+                .then(metadata => {
+                  console.log("Metadata from Pinata:", metadata);
+                  // Update the NFT with metadata from Pinata
+                  const updatedNfts = nfts.map(nft => {
+                    if (nft.id === jsonData.tx_id) {
+                      return {
+                        ...nft,
+                        image: metadata.image || nft.image,
+                        bloodType: metadata.attributes.bloodType || nft.bloodType,
+                        donorName: metadata.attributes.donorName,
+                        timestamp: metadata.attributes.timestamp
+                      };
+                    }
+                    return nft;
+                  });
+                  setNfts(updatedNfts);
+                })
+                .catch(err => console.error("Error fetching from Pinata:", err));
+            } else {
+              console.warn("No valid IPFS hash found for transaction:", jsonData);
+            }
             
             return {
               id: jsonData.tx_id,
               name: `Blood Donation #${jsonData.tx_id.slice(0, 8)}`,
-              image: imagePath,
+              image: jsonData.image_url || process.env.PUBLIC_URL + '/NFT_IMAGES/1.png',
               bloodType: jsonData.blood_type,
               donationDate: new Date(jsonData.timestamp).toLocaleDateString(),
-              hospital: 'Verified Hospital',
+              hospital: jsonData.hospital || 'Verified Hospital',
               redeemed: false,
-              benefits: ['10% discount at MedPharm', 'Free health checkup at City General']
+              benefits: jsonData.benefits || ['10% discount at MedPharm', 'Free health checkup at City General'],
+              ipfsHash: jsonData.ipfs_hash
             };
           });
 
+        console.log("Processed NFT transactions:", nftTransactions);
         setNfts(nftTransactions);
       } catch (error) {
         console.error('Error fetching NFTs:', error);
         // If there's an error, set some mock data for testing
-        setNfts(mockNFTs.map(nft => ({
-          ...nft,
-          image: process.env.PUBLIC_URL + '/NFT_IMAGES/1.png' // Use a default image
-        })));
+        setNfts(mockNFTs);
       } finally {
         setIsLoading(false);
       }
@@ -153,6 +188,28 @@ export function UserDashboard() {
   // Add an error handler for images
   const handleImageError = (e) => {
     e.target.src = process.env.PUBLIC_URL + '/NFT_IMAGES/1.png'; // Fallback to default image
+  };
+
+  // Add a function to convert Google Drive URL to direct image URL
+  const getDirectImageUrl = (driveUrl) => {
+    if (!driveUrl) return process.env.PUBLIC_URL + '/NFT_IMAGES/1.png';
+    
+    // If it's not a Google Drive URL, return as is
+    if (!driveUrl.includes('drive.google.com')) {
+      return driveUrl;
+    }
+    
+    // Extract file ID from Google Drive URL
+    const fileId = driveUrl.match(/\/d\/(.*?)\/view/)?.[1];
+    console.log("Processing Drive URL:", driveUrl);
+    console.log("Extracted File ID:", fileId);
+    
+    if (!fileId) {
+      console.warn("Could not extract file ID from URL:", driveUrl);
+      return process.env.PUBLIC_URL + '/NFT_IMAGES/1.png';
+    }
+    
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
   };
 
   return (
@@ -271,12 +328,12 @@ export function UserDashboard() {
                   <div 
                     className="relative cursor-pointer aspect-square" 
                     onClick={() => {
-                      setSelectedImage(nft.image);
+                      setSelectedImage(getDirectImageUrl(nft.image));
                       setShowImageModal(true);
                     }}
                   >
                     <img 
-                      src={nft.image} 
+                      src={getDirectImageUrl(nft.image)} 
                       alt={nft.name} 
                       className="w-full h-full object-cover"
                       style={{ transform: 'translateZ(0)' }}
@@ -414,9 +471,10 @@ export function UserDashboard() {
                 <div className="p-6">
                   <div className="flex items-start space-x-4 mb-6">
                     <img 
-                      src={selectedNft.image} 
+                      src={getDirectImageUrl(selectedNft.image)} 
                       alt={selectedNft.name} 
                       className="w-20 h-20 object-cover rounded-lg"
+                      onError={handleImageError}
                     />
                     <div>
                       <h4 className="text-lg font-semibold text-white">{selectedNft.name}</h4>
@@ -494,9 +552,10 @@ export function UserDashboard() {
                 
                 <div className="p-4">
                   <img 
-                    src={selectedImage} 
+                    src={getDirectImageUrl(selectedImage)} 
                     alt=""
                     className="w-full h-auto rounded-lg shadow-xl"
+                    onError={handleImageError}
                   />
                 </div>
               </div>
