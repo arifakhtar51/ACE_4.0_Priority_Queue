@@ -5,6 +5,7 @@ import * as hiveTx from "hive-tx";
 import HiveTransactions from "./HiveTransactions";
 import HiveKeychainLogin from "./HiveKeychainLogin";
 import BroadcastTransaction from "./BroadcastTransaction";
+import { PINATA_API } from '../config/api';
 
 // Mock data for user's NFTs
 const mockNFTs = [
@@ -42,12 +43,15 @@ const mockNFTs = [
 
 export function UserDashboard() {
   const { userRole } = useContext(RoleContext);
-  const [nfts, setNfts] = useState(mockNFTs);
+  const [nfts, setNfts] = useState([]);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [selectedNft, setSelectedNft] = useState(null);
   const [username, setUsername] = useState("");
   const [hoverCard, setHoverCard] = useState(null);
   const [showBlockchainSection, setShowBlockchainSection] = useState(true);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Redeem NFT function
   const handleRedeemNFT = (nftId) => {
@@ -58,6 +62,65 @@ export function UserDashboard() {
     setShowRedeemModal(false);
     setSelectedNft(null);
   };
+
+  useEffect(() => {
+    const fetchNFTs = async () => {
+      try {
+        setIsLoading(true);
+        // Fetch NFTs from Hive blockchain
+        const response = await fetch(`https://api.hive.blog`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'condenser_api.get_account_history',
+            params: [username, -1, 1000],
+          }),
+        });
+
+        const data = await response.json();
+        
+        // Filter and process NFT transactions
+        const nftTransactions = data.result
+          .filter(tx => tx[1].op[0] === 'custom_json' && tx[1].op[1].id === 'life_nft')
+          .map(tx => {
+            const jsonData = JSON.parse(tx[1].op[1].json);
+            // Ensure the image path is correct by prepending the public URL if needed
+            const imagePath = jsonData.image_path.startsWith('http') 
+              ? jsonData.image_path 
+              : process.env.PUBLIC_URL + jsonData.image_path;
+            
+            return {
+              id: jsonData.tx_id,
+              name: `Blood Donation #${jsonData.tx_id.slice(0, 8)}`,
+              image: imagePath,
+              bloodType: jsonData.blood_type,
+              donationDate: new Date(jsonData.timestamp).toLocaleDateString(),
+              hospital: 'Verified Hospital',
+              redeemed: false,
+              benefits: ['10% discount at MedPharm', 'Free health checkup at City General']
+            };
+          });
+
+        setNfts(nftTransactions);
+      } catch (error) {
+        console.error('Error fetching NFTs:', error);
+        // If there's an error, set some mock data for testing
+        setNfts(mockNFTs.map(nft => ({
+          ...nft,
+          image: process.env.PUBLIC_URL + '/NFT_IMAGES/1.png' // Use a default image
+        })));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (username) {
+      fetchNFTs();
+    }
+  }, [username]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("hive_username");
@@ -86,6 +149,11 @@ export function UserDashboard() {
       </div>
     );
   }
+
+  // Add an error handler for images
+  const handleImageError = (e) => {
+    e.target.src = process.env.PUBLIC_URL + '/NFT_IMAGES/1.png'; // Fallback to default image
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -175,87 +243,110 @@ export function UserDashboard() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-6 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mr-2 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           My NFT Collection
         </h2>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {nfts.map((nft) => (
-            <div 
-              key={nft.id}
-              className="relative group"
-              onMouseEnter={() => setHoverCard(nft.id)}
-              onMouseLeave={() => setHoverCard(null)}
-            >
-              <div className={`absolute -inset-0.5 bg-gradient-to-r ${nft.redeemed ? 'from-gray-600/30 to-gray-400/30' : 'from-pink-600/30 to-purple-600/30'} rounded-xl blur opacity-70 group-hover:opacity-100 transition duration-300`}></div>
-              <div className="relative bg-slate-800/60 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-lg overflow-hidden">
-                {/* NFT Image and Status */}
-                <div className="relative">
-                  <img 
-                    src={nft.image} 
-                    alt={nft.name} 
-                    className="w-full h-48 object-cover"
-                  />
-                  {nft.redeemed && (
-                    <div className="absolute top-0 right-0 m-2 bg-slate-800/80 backdrop-blur-sm text-gray-300 px-3 py-1 rounded-full text-xs font-semibold border border-gray-600/50">
-                      Redeemed
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+          </div>
+        ) : nfts.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-slate-400">No NFTs found. Your blood donation NFTs will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {nfts.map((nft) => (
+              <div 
+                key={nft.id}
+                className="relative group"
+                onMouseEnter={() => setHoverCard(nft.id)}
+                onMouseLeave={() => setHoverCard(null)}
+              >
+                <div className={`absolute -inset-0.5 bg-gradient-to-r ${nft.redeemed ? 'from-gray-600/30 to-gray-400/30' : 'from-pink-600/30 to-purple-600/30'} rounded-xl blur opacity-70 group-hover:opacity-100 transition duration-300`}></div>
+                <div className="relative bg-slate-800/60 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-lg overflow-hidden">
+                  {/* NFT Image and Status */}
+                  <div 
+                    className="relative cursor-pointer aspect-square" 
+                    onClick={() => {
+                      setSelectedImage(nft.image);
+                      setShowImageModal(true);
+                    }}
+                  >
+                    <img 
+                      src={nft.image} 
+                      alt={nft.name} 
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'translateZ(0)' }}
+                      onError={handleImageError}
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <span className="text-white text-sm font-medium px-3 py-1 bg-black/50 rounded-full backdrop-blur-sm">
+                        Click to view
+                      </span>
+                    </div>
+                    {nft.redeemed && (
+                      <div className="absolute top-0 right-0 m-2 bg-slate-800/80 backdrop-blur-sm text-gray-300 px-3 py-1 rounded-full text-xs font-semibold border border-gray-600/50">
+                        Redeemed
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* NFT Details */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold mb-1">{nft.name}</h3>
+                    <div className="flex items-center mb-2">
+                      <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-sm font-medium mr-2">
+                        {nft.bloodType}
+                      </span>
+                      <span className="text-xs text-slate-400">{nft.donationDate}</span>
+                    </div>
+                    <p className="text-sm text-slate-300 mb-3">{nft.hospital}</p>
+                    
+                    {/* Action Button */}
+                    {!nft.redeemed ? (
+                      <button
+                        onClick={() => {
+                          setSelectedNft(nft);
+                          setShowRedeemModal(true);
+                        }}
+                        className="w-full py-2 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-pink-600 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 focus:outline-none"
+                      >
+                        Redeem Benefits
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="w-full py-2 px-4 bg-slate-700 text-slate-400 rounded-lg font-medium cursor-not-allowed"
+                      >
+                        Already Redeemed
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Hover Card with Benefits */}
+                  {hoverCard === nft.id && !nft.redeemed && (
+                    <div className="absolute top-full left-0 right-0 mt-2 p-4 bg-slate-800/95 backdrop-blur-md rounded-lg border border-purple-500/20 shadow-lg z-10">
+                      <h4 className="text-sm font-semibold text-purple-400 mb-2">Available Benefits:</h4>
+                      <ul className="space-y-1">
+                        {nft.benefits.map((benefit, index) => (
+                          <li key={index} className="text-sm text-slate-300 flex items-start">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            {benefit}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
-                
-                {/* NFT Details */}
-                <div className="p-4">
-                  <h3 className="text-lg font-semibold mb-1">{nft.name}</h3>
-                  <div className="flex items-center mb-2">
-                    <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-sm font-medium mr-2">
-                      {nft.bloodType}
-                    </span>
-                    <span className="text-xs text-slate-400">{nft.donationDate}</span>
-                  </div>
-                  <p className="text-sm text-slate-300 mb-3">{nft.hospital}</p>
-                  
-                  {/* Action Button */}
-                  {!nft.redeemed ? (
-                    <button
-                      onClick={() => {
-                        setSelectedNft(nft);
-                        setShowRedeemModal(true);
-                      }}
-                      className="w-full py-2 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-pink-600 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 focus:outline-none"
-                    >
-                      Redeem Benefits
-                    </button>
-                  ) : (
-                    <button
-                      disabled
-                      className="w-full py-2 px-4 bg-slate-700 text-slate-400 rounded-lg font-medium cursor-not-allowed"
-                    >
-                      Already Redeemed
-                    </button>
-                  )}
-                </div>
-                
-                {/* Hover Card with Benefits */}
-                {hoverCard === nft.id && !nft.redeemed && (
-                  <div className="absolute top-full left-0 right-0 mt-2 p-4 bg-slate-800/95 backdrop-blur-md rounded-lg border border-purple-500/20 shadow-lg z-10">
-                    <h4 className="text-sm font-semibold text-purple-400 mb-2">Available Benefits:</h4>
-                    <ul className="space-y-1">
-                      {nft.benefits.map((benefit, index) => (
-                        <li key={index} className="text-sm text-slate-300 flex items-start">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          {benefit}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Redemption History */}
@@ -375,6 +466,38 @@ export function UserDashboard() {
                       Confirm Redemption
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {showImageModal && selectedImage && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm transition-opacity" onClick={() => setShowImageModal(false)}></div>
+            
+            <div className="relative max-w-4xl w-full mx-auto">
+              <div className="relative bg-slate-800 rounded-xl overflow-hidden">
+                <div className="absolute top-0 right-0 p-4">
+                  <button
+                    onClick={() => setShowImageModal(false)}
+                    className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-700 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className="p-4">
+                  <img 
+                    src={selectedImage} 
+                    alt=""
+                    className="w-full h-auto rounded-lg shadow-xl"
+                  />
                 </div>
               </div>
             </div>

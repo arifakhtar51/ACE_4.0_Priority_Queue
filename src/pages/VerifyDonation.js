@@ -3,19 +3,20 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import { useDonations } from '../contexts/DonationContext'; // Import the context
+import { PINATA_JWT, PINATA_API } from '../config/api';
 
 // Array of NFT images
 const NFT_IMAGES = [
-  "/NFT_IMAGES/nft1.jpg",
-  "/NFT_IMAGES/nft2.jpg",
-  "/NFT_IMAGES/nft3.jpg",
-  "/NFT_IMAGES/nft4.jpg",
-  "/NFT_IMAGES/nft5.jpg",
-  "/NFT_IMAGES/nft6.jpg",
-  "/NFT_IMAGES/nft7.jpg",
-  "/NFT_IMAGES/nft8.jpg",
-  "/NFT_IMAGES/nft9.jpg",
-  "/NFT_IMAGES/nft10.jpg"
+  "/NFT_IMAGES/1.png",
+  "/NFT_IMAGES/2.png",
+  "/NFT_IMAGES/3.png",
+  "/NFT_IMAGES/4.jpg",
+  "/NFT_IMAGES/5.jpg",
+  "/NFT_IMAGES/6.png",
+  "/NFT_IMAGES/7.png",
+  "/NFT_IMAGES/8.png",
+  "/NFT_IMAGES/9.png",
+  "/NFT_IMAGES/10.jpg"
 ];
 
 export function VerifyDonation() {
@@ -30,7 +31,6 @@ export function VerifyDonation() {
   });
   const [isVerifying, setIsVerifying] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState("");
-  const [ipfsHash, setIpfsHash] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -42,12 +42,26 @@ export function VerifyDonation() {
   const generateNFTImage = async () => {
     setIsGenerating(true);
     
-    // Simulate AI generation delay
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length);
-    setSelectedImage(NFT_IMAGES[randomIndex]);
-    setIsGenerating(false);
+    try {
+      // Simulate AI generation delay
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      
+      // Select and store the image path with public URL
+      const randomIndex = Math.floor(Math.random() * NFT_IMAGES.length);
+      const selectedImagePath = process.env.PUBLIC_URL + NFT_IMAGES[randomIndex];
+      setSelectedImage(selectedImagePath);
+      
+    } catch (error) {
+      console.error("Error generating NFT image:", error);
+      alert("Error generating NFT image. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Add an error handler for images
+  const handleImageError = (e) => {
+    e.target.src = process.env.PUBLIC_URL + '/NFT_IMAGES/1.png'; // Fallback to default image
   };
 
   const handleSubmit = async (e) => {
@@ -62,7 +76,7 @@ export function VerifyDonation() {
       const metadata = {
         name: "LifeNFT Blood Donation Badge",
         description: "NFT awarded for blood donation",
-        image: selectedImage,
+        image_path: selectedImage, // Store the path instead of IPFS hash
         attributes: {
           donorId: formData.donorId,
           donorName: formData.donorName,
@@ -73,22 +87,6 @@ export function VerifyDonation() {
         }
       };
 
-      const pinataJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI5OTMyNjE0OC1hMzIzLTQ0YzItYjUwNi00MTU0YTNiMTNmMzMiLCJlbWFpbCI6ImFyaWZha2h0YXI5MDJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImY4NGUyNWIzYzgyYjY1ZTAzOGExIiwic2NvcGVkS2V5U2VjcmV0IjoiOWRjODM2Yzk5OTNiMTg2Zjg0ZTQ3MWQ5ZmU1ZDE2ZTY3YzE0ZDIwZTczNTlkNGU0ODJmODVkMjFkNWNkMDdmNiIsImV4cCI6MTc3MjgyNzM3NX0.tFYF935D4sJDZY98sLj1rK9lC2NOrk-x9f2lYjXHpgQ";
-
-      const pinataResponse = await axios.post(
-        "https://api.pinata.cloud/pinning/pinJSONToIPFS",
-        metadata,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${pinataJWT}`
-          }
-        }
-      );
-
-      const ipfsHash = pinataResponse.data.IpfsHash;
-      setIpfsHash(ipfsHash);
-
       const customJson = {
         id: "life_nft",
         json: JSON.stringify({
@@ -98,7 +96,7 @@ export function VerifyDonation() {
           blood_type: formData.bloodType,
           amount: formData.amount,
           notes: formData.notes,
-          ipfs_hash: ipfsHash,
+          image_path: selectedImage, // Store the path in blockchain
           timestamp: new Date().toISOString(),
           tx_id: uuidv4()
         }),
@@ -122,12 +120,12 @@ export function VerifyDonation() {
                 bloodType: formData.bloodType,
                 donationDate: new Date().toISOString(),
                 nftIssued: true,
-                verifiedBy: "Your Name" // Replace with actual verifier
+                image_path: selectedImage,
+                verifiedBy: "Your Name"
               };
 
-              // Add the transaction to the hospital dashboard
-              addDonation(newTransaction); // Add the new transaction to the context
-              navigate('/hospital-dashboard'); // Redirect to the dashboard
+              addDonation(newTransaction);
+              navigate('/hospital-dashboard');
             } else {
               setTransactionStatus("Transaction failed: " + response.message);
             }
@@ -257,6 +255,7 @@ export function VerifyDonation() {
                   src={selectedImage}
                   alt="Generated NFT"
                   className="w-full h-full object-cover"
+                  onError={handleImageError}
                 />
               </div>
             )}
